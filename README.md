@@ -2,25 +2,6 @@
 
 **大量の動画ファイルを高速に閲覧するためのビューアです。**
 
-数千〜数万ファイルのフォルダでもパフォーマンスが落ちません。
-Rust製バックエンド（[Tauri](https://tauri.app)）と仮想スクロールのマソングリッドにより、画面に表示されている動画だけをデコードします。
-
-> **High-performance video viewer for large collections.**  
-> Handles thousands of files without slowdown. Rust/Tauri backend with virtual masonry grid.
-
----
-
-## videoswarm との違い
-
-| | videoswarm | vViewer |
-|---|---|---|
-| バックエンド | Node.js / Electron | Rust (Tauri) |
-| ディレクトリスキャン | JS シングルスレッド | Rust + rayon 並列処理 |
-| グリッドの DOM ノード数 | ファイル総数分 | 表示中のみ（仮想スクロール） |
-| 映像デコーダ数 | 表示中すべて | ビューポート ± バッファ 1画面 |
-| メモリ増加 | ファイル数に比例 | 表示数に比例（ほぼ一定） |
-| バイナリサイズ | 約 200 MB | 約 8 MB |
-
 ---
 
 ## 機能
@@ -104,12 +85,6 @@ vViewer/
     │   └── grid.js         仮想マソングリッド
     └── css/main.css
 ```
-
-### ローカル HTTP サーバーを使う理由
-
-ブラウザの `<video>` 要素がシーク（任意の位置への移動）をするには HTTP Range リクエストが必要です。Tauri のアセットプロトコルでも対応可能ですが、3プラットフォーム全てで確実に動作させるため、起動時に Axum HTTP サーバー（`127.0.0.1:ランダムポート`）を立ち上げてファイルをストリーミングしています。
-
----
 
 ## ライセンス
 
