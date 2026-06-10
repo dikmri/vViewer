@@ -1,0 +1,32 @@
+[package]
+name = "vviewer"
+version = "0.1.0"
+description = "High-performance video viewer for large collections"
+edition = "2021"
+
+[lib]
+name = "vviewer_lib"
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+rayon = "1"
+walkdir = "2"
+notify = "6"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }
+mime_guess = "2"
+urlencoding = "2"
+anyhow = "1"
+parking_lot = "0.12"
+dirs = "5"

@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            args: ''
+          - os: windows-latest
+            args: ''
+          - os: macos-latest
+            args: '--target universal-apple-darwin'
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Linux system deps ────────────────────────────────
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      # ── Node / npm (for @tauri-apps/cli) ─────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install npm dependencies
+        run: npm install
+
+      # ── Rust ─────────────────────────────────────────────
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Rust build cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # ── Icon generation ───────────────────────────────────
+      - name: Generate app icon
+        run: python3 scripts/gen_icon.py
+
+      # ── Build & upload release artifacts ─────────────────
+      - name: Build and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName:      ${{ github.ref_name }}${{ github.event.inputs.tag }}
+          releaseName:  'vViewer ${{ github.ref_name }}${{ github.event.inputs.tag }}'
+          releaseBody: |
+            ## Changes
+            See [CHANGELOG](https://github.com/dikmri/vViewer/blob/main/CHANGELOG.md) for details.
+
+            ## Install
+
+            **Windows** — download the `.msi` installer below and run it.
+
+            **macOS** — download the `.dmg`, open it, and drag vViewer to Applications.
+            > First launch: right-click → Open to bypass Gatekeeper (no code-signing yet).
+
+            **Linux** — download the `.AppImage`, make it executable (`chmod +x`), and run it.
+            Or download the `.deb` and install with `sudo dpkg -i`.
+
+            ## One-command install (Linux / macOS)
+            ```sh
+            curl -sSfL https://raw.githubusercontent.com/dikmri/vViewer/main/install.sh | sh
+            ```
+
+            **Windows (PowerShell)**
+            ```powershell
+            irm https://raw.githubusercontent.com/dikmri/vViewer/main/install.ps1 | iex
+            ```
+          releaseDraft:   false
+          prerelease:     false
+          iconPath:       app-icon.png
+          args:           ${{ matrix.args }}

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>vViewer</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<!-- ── Toolbar ───────────────────────────────────────── -->
+<div id="toolbar">
+  <button id="btn-open" title="Open folder (Ctrl+O)">📁 Open Folder</button>
+  <div class="sep"></div>
+  <input id="search" type="search" placeholder="Search…" autocomplete="off">
+  <div class="sep"></div>
+  <div id="zoom-wrap">
+    <span>Zoom</span>
+    <input id="zoom-slider" type="range" min="120" max="520" value="240" step="20">
+    <span id="zoom-value">240px</span>
+  </div>
+  <div class="sep"></div>
+  <select id="sort-select" title="Sort order">
+    <option value="modified">Date ↓</option>
+    <option value="filename">Name ↑</option>
+    <option value="size">Size ↓</option>
+    <option value="rating">Rating ↓</option>
+  </select>
+  <div class="sep"></div>
+  <button id="mute-btn" title="Toggle mute">🔇</button>
+  <span id="file-count">—</span>
+</div>
+
+<!-- ── Grid ──────────────────────────────────────────── -->
+<div id="grid-wrap">
+  <div id="grid-container"></div>
+</div>
+
+<!-- ── Empty state ───────────────────────────────────── -->
+<div id="empty-state">
+  <div class="empty-inner">
+    <div class="empty-icon">🎬</div>
+    <h2>No folder open</h2>
+    <p>Open a folder containing video files to get started.</p>
+    <button id="btn-open-empty">Open Folder</button>
+  </div>
+</div>
+
+<!-- ── Context menu ──────────────────────────────────── -->
+<div id="ctx-menu">
+  <div class="ctx-item" id="ctx-explorer">Show in File Manager</div>
+  <div class="ctx-item" id="ctx-copy">Copy Path</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-label">Rating</div>
+  <div class="ctx-stars">
+    <span class="star-btn" data-r="0" title="Clear">✕</span>
+    <span class="star-btn" data-r="1">★</span>
+    <span class="star-btn" data-r="2">★</span>
+    <span class="star-btn" data-r="3">★</span>
+    <span class="star-btn" data-r="4">★</span>
+    <span class="star-btn" data-r="5">★</span>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
