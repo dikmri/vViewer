@@ -1,20 +1,35 @@
 name: Release
 
+# main へのプッシュごとに自動リリース
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'リリースするタグ（例: v0.1.0）'
-        required: true
 
 permissions:
   contents: write
 
 jobs:
+  # ── バージョン計算 ─────────────────────────────────────────────────────────
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.calc.outputs.version }}
+      tag:     ${{ steps.calc.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: バージョン計算 (major.minor from tauri.conf.json + run_number as patch)
+        id: calc
+        run: |
+          BASE=$(jq -r '.version' src-tauri/tauri.conf.json | sed 's/\.[^.]*$//')
+          VERSION="${BASE}.${{ github.run_number }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION"    >> $GITHUB_OUTPUT
+
+  # ── クロスプラットフォームビルド & リリース ─────────────────────────────────
   build:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +48,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: tauri.conf.json のバージョンを自動計算値に差し替え
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = 'src-tauri/tauri.conf.json';
+            const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+            cfg.version = process.env.VERSION;
+            fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
+          "
 
       - name: Linux 依存パッケージのインストール
         if: matrix.os == 'ubuntu-22.04'
@@ -72,18 +100,20 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         with:
-          tagName:     ${{ github.ref_name }}
-          releaseName: 'vViewer ${{ github.ref_name }}'
+          tagName:     ${{ needs.version.outputs.tag }}
+          releaseName: 'vViewer ${{ needs.version.outputs.tag }}'
           releaseBody: |
-            ## vViewer ${{ github.ref_name }}
+            ## vViewer ${{ needs.version.outputs.tag }}
 
             大量の動画ファイルを高速に閲覧できる動画ビューアです。
+
+            **コミット:** ${{ github.sha }}
 
             ### ダウンロード
 
             | OS | ファイル |
             |---|---|
-            | Windows | `.msi` インストーラー |
+            | Windows | `.msi` または `setup.exe` |
             | macOS | `.dmg`（Intel + Apple Silicon ユニバーサル） |
             | Linux | `.AppImage` または `.deb` |
 
