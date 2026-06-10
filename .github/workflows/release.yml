@@ -21,10 +21,13 @@ jobs:
         include:
           - os: ubuntu-22.04
             args: ''
+            rust_targets: ''
           - os: windows-latest
             args: ''
+            rust_targets: ''
           - os: macos-latest
             args: '--target universal-apple-darwin'
+            rust_targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
 
     runs-on: ${{ matrix.os }}
 
@@ -52,7 +55,7 @@ jobs:
       - name: Rust のインストール
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin
+          targets: ${{ matrix.rust_targets }}
 
       - name: Rust ビルドキャッシュ
         uses: swatinem/rust-cache@v2
