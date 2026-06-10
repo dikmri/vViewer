@@ -18,9 +18,7 @@ jobs:
       tag:     ${{ steps.calc.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: バージョン計算 (major.minor from tauri.conf.json + run_number as patch)
-        id: calc
+      - id: calc
         run: |
           BASE=$(jq -r '.version' src-tauri/tauri.conf.json | sed 's/\.[^.]*$//')
           VERSION="${BASE}.${{ github.run_number }}"
@@ -93,15 +91,17 @@ jobs:
       - name: アプリアイコンの生成
         run: python3 scripts/gen_icon.py
 
-      - name: ビルド & リリースへアップロード
+      # tauri-action は latest.json 生成を無効化し、インストーラーのみアップロード
+      # (latest.json は後続の publish-updater ジョブで手動生成)
+      - name: ビルド & インストーラーをリリースへアップロード
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         with:
-          tagName:     ${{ needs.version.outputs.tag }}
-          releaseName: 'vViewer ${{ needs.version.outputs.tag }}'
+          tagName:            ${{ needs.version.outputs.tag }}
+          releaseName:        'vViewer ${{ needs.version.outputs.tag }}'
           releaseBody: |
             ## vViewer ${{ needs.version.outputs.tag }}
 
@@ -113,7 +113,7 @@ jobs:
 
             | OS | ファイル |
             |---|---|
-            | Windows | `.msi` または `setup.exe` |
+            | Windows | `setup.exe` または `.msi` |
             | macOS | `.dmg`（Intel + Apple Silicon ユニバーサル） |
             | Linux | `.AppImage` または `.deb` |
 
@@ -132,9 +132,112 @@ jobs:
             > **macOS 注意:** コード署名なしのため、初回起動は右クリック→「開く」を選んでください。
 
             ---
-
             *High-performance video viewer. [English README](https://github.com/dikmri/vViewer#english)*
-          releaseDraft: false
-          prerelease:   false
-          iconPath:     app-icon.png
-          args:         ${{ matrix.args }}
+          releaseDraft:       false
+          prerelease:         false
+          iconPath:           app-icon.png
+          args:               ${{ matrix.args }}
+          includeUpdaterJson: false
+
+      # ── 署名ファイル (.sig) とアップデーター用 zip をリリースに追加アップロード
+      # tauri-action が upload しない .msi.zip/.sig, .nsis.zip/.sig,
+      # .app.tar.gz.sig, .AppImage.sig を手動でアップロードする
+      - name: アップデーター署名ファイルをリリースへアップロード
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          FILES=$(find src-tauri/target -type f \( \
+            -name "*.msi.zip"        -o -name "*.msi.zip.sig"   \
+            -o -name "*.nsis.zip"    -o -name "*.nsis.zip.sig"  \
+            -o -name "*.app.tar.gz.sig"                          \
+            -o -name "*.AppImage.sig"                            \
+          \) 2>/dev/null | tr '\n' ' ')
+
+          if [ -n "$(echo $FILES | tr -d ' ')" ]; then
+            echo "Uploading: $FILES"
+            gh release upload "$TAG" $FILES --clobber
+          else
+            echo "No updater signature files found"
+          fi
+
+  # ── 全プラットフォームの署名を集めて latest.json を生成 ────────────────────
+  publish-updater:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: latest.json を生成してリリースへアップロード
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG:     ${{ needs.version.outputs.tag }}
+          REPO:    ${{ github.repository }}
+        run: |
+          mkdir -p sigs
+          gh release download "$TAG" --repo "$REPO" --pattern "*.sig" -D sigs/ || true
+          echo "=== Downloaded .sig files ==="
+          ls -la sigs/
+
+          python3 - << 'PYEOF'
+          import os, json, glob
+          from datetime import datetime, timezone
+
+          version = os.environ['VERSION']
+          tag     = os.environ['TAG']
+          repo    = os.environ['REPO']
+          base    = f"https://github.com/{repo}/releases/download/{tag}"
+
+          platforms = {}
+
+          # Windows: MSI zip 優先、次に raw MSI
+          for sig_name, url in [
+              (f"vViewer_{version}_x64_en-US.msi.zip.sig",
+               f"{base}/vViewer_{version}_x64_en-US.msi.zip"),
+              (f"vViewer_{version}_x64_en-US.msi.sig",
+               f"{base}/vViewer_{version}_x64_en-US.msi"),
+          ]:
+              p = f"sigs/{sig_name}"
+              if os.path.exists(p) and "windows-x86_64" not in platforms:
+                  platforms["windows-x86_64"] = {
+                      "signature": open(p).read().strip(),
+                      "url": url,
+                  }
+
+          # macOS universal
+          mac_sig = "sigs/vViewer.app.tar.gz.sig"
+          if os.path.exists(mac_sig):
+              sig = open(mac_sig).read().strip()
+              for plat in ("darwin-x86_64", "darwin-aarch64"):
+                  platforms[plat] = {
+                      "signature": sig,
+                      "url": f"{base}/vViewer_universal.app.tar.gz",
+                  }
+
+          # Linux AppImage
+          for f in glob.glob("sigs/*.AppImage.sig"):
+              fname = os.path.basename(f)[:-4]  # .sig を除いた .AppImage ファイル名
+              platforms["linux-x86_64"] = {
+                  "signature": open(f).read().strip(),
+                  "url": f"{base}/{fname}",
+              }
+              break
+
+          payload = {
+              "version":   version,
+              "notes":     "",
+              "pub_date":  datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "platforms": platforms,
+          }
+
+          with open("latest.json", "w") as fh:
+              json.dump(payload, fh, indent=2)
+
+          print("=== latest.json ===")
+          print(json.dumps(payload, indent=2))
+
+          if not platforms:
+              raise SystemExit("ERROR: platforms is empty — no .sig files found!")
+          PYEOF
+
+          gh release upload "$TAG" latest.json --clobber --repo "$REPO"
