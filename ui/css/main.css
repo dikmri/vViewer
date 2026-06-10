@@ -71,12 +71,16 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body {
-  height: 100%;
+/* overflow-x:hidden on body would implicitly set overflow-y:auto, making body
+   the scroll container and breaking window.scrollY / virtual scroll. Keep only
+   on html (the root), and let body grow freely with content. */
+html {
+  overflow-x: hidden;
+}
+body {
   background: var(--bg);
   color: var(--text);
   font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  overflow-x: hidden;
 }
 
 /* ── Toolbar ─────────────────────────────────────────── */
@@ -163,6 +167,29 @@ button:hover { background: var(--accent); border-color: var(--accent); }
   position: relative;
   width: 100%;
 }
+
+/* ── Loading spinner ─────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.tile-spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.tile-spinner::after {
+  content: '';
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255,255,255,.15);
+  border-top-color: rgba(255,255,255,.75);
+  border-radius: 50%;
+  animation: spin .75s linear infinite;
+}
+.tile.loaded .tile-spinner { display: none; }
 
 /* ── Tiles ───────────────────────────────────────────── */
 .tile {

@@ -72,6 +72,23 @@ function bindUpdateBar() {
   laterBtn.addEventListener('click', hideBar);
 }
 
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+function bindKeyboard() {
+  window.addEventListener('keydown', (e) => {
+    // Don't capture when typing in an input
+    if (document.activeElement?.tagName === 'INPUT') return;
+
+    const amount = Math.round(window.innerHeight * 0.6);
+    if (e.key === 'j' || e.key === 'J') {
+      e.preventDefault();
+      window.scrollBy({ top: amount, behavior: 'smooth' });
+    } else if (e.key === 'k' || e.key === 'K') {
+      e.preventDefault();
+      window.scrollBy({ top: -amount, behavior: 'smooth' });
+    }
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   const port = await invoke('get_video_port');
@@ -80,6 +97,7 @@ async function init() {
   bindToolbar();
   bindContextMenu();
   bindUpdateBar();
+  bindKeyboard();
   listenFileWatcher();
 
   showEmpty(true);

@@ -22,7 +22,9 @@ export class MasonryGrid {
 
     this.container.style.position = 'relative';
 
-    // Throttle scroll via rAF
+    // Throttle scroll via rAF.
+    // Listen on window (standard) AND document.documentElement as fallback,
+    // since some webview configurations route scroll to the html element.
     let rafPending = false;
     this._onScroll = () => {
       if (!rafPending) {
@@ -31,6 +33,7 @@ export class MasonryGrid {
       }
     };
     window.addEventListener('scroll', this._onScroll, { passive: true });
+    document.documentElement.addEventListener('scroll', this._onScroll, { passive: true });
 
     this._ro = new ResizeObserver(() => this._relayout());
     this._ro.observe(container.parentElement || document.documentElement);
@@ -92,7 +95,7 @@ export class MasonryGrid {
   }
 
   _updateViewport() {
-    const scrollY = window.scrollY;
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
     const viewH   = window.innerHeight;
     const buffer  = viewH;                   // one extra screen above and below
     const top     = scrollY - buffer;
@@ -147,7 +150,6 @@ export class MasonryGrid {
 
     video.addEventListener('loadedmetadata', () => {
       if (video.videoWidth && video.videoHeight) {
-        // Persist real dimensions so future layouts use correct aspect ratio
         item.width  = video.videoWidth;
         item.height = video.videoHeight;
         window.__tauri_invoke?.('update_dimensions', {
@@ -158,7 +160,14 @@ export class MasonryGrid {
       }
     });
 
+    // Mark loaded when the browser can start playing (hides spinner)
+    video.addEventListener('canplay', () => tile.classList.add('loaded'), { once: true });
+
     video.src = `http://127.0.0.1:${window.__videoPort}/file?path=${encodeURIComponent(item.path)}`;
+
+    // Spinner (shown until canplay)
+    const spinner = document.createElement('div');
+    spinner.className = 'tile-spinner';
 
     // Overlay
     const overlay = document.createElement('div');
@@ -172,7 +181,7 @@ export class MasonryGrid {
     stars.className   = 'tile-stars';
     stars.textContent = '★'.repeat(item.rating || 0);
 
-    tile.append(video, overlay, stars);
+    tile.append(video, spinner, overlay, stars);
 
     // Double-click → fullscreen
     tile.addEventListener('dblclick', () => {
@@ -194,6 +203,7 @@ export class MasonryGrid {
   destroy() {
     this._clearAll();
     window.removeEventListener('scroll', this._onScroll);
+    document.documentElement.removeEventListener('scroll', this._onScroll);
     this._ro.disconnect();
   }
 }
