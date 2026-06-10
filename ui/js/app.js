@@ -17,6 +17,61 @@ let filtered      = [];
 let currentFolder = null;
 let ctxTarget     = null;   // path string for context-menu
 
+// ── Update bar ────────────────────────────────────────────────────────────────
+function bindUpdateBar() {
+  const bar      = document.getElementById('update-bar');
+  const msg      = document.getElementById('update-msg');
+  const progWrap = document.getElementById('update-progress-wrap');
+  const progBar  = document.getElementById('update-progress-bar');
+  const progTxt  = document.getElementById('update-progress-text');
+  const nowBtn   = document.getElementById('update-now-btn');
+  const laterBtn = document.getElementById('update-later-btn');
+
+  function showBar() {
+    bar.classList.add('visible');
+    const h = bar.offsetHeight;
+    document.documentElement.style.setProperty('--update-bar-h', h + 'px');
+  }
+
+  function hideBar() {
+    bar.classList.remove('visible');
+    document.documentElement.style.setProperty('--update-bar-h', '0px');
+  }
+
+  listen('update-available', (e) => {
+    const { version, body } = e.payload;
+    msg.textContent = `新しいバージョン v${version} が利用可能です。${body ? '  ' + body.split('\n')[0] : ''}`;
+    progWrap.style.display = 'none';
+    nowBtn.disabled = false;
+    nowBtn.textContent = '今すぐ更新';
+    showBar();
+  });
+
+  listen('update-progress', (e) => {
+    const pct = e.payload;
+    progWrap.style.display = 'flex';
+    progBar.style.setProperty('--pct', pct + '%');
+    progTxt.textContent = pct + '%';
+  });
+
+  nowBtn.addEventListener('click', async () => {
+    nowBtn.disabled = true;
+    nowBtn.textContent = 'ダウンロード中…';
+    msg.textContent = 'アップデートをダウンロード中…';
+    progWrap.style.display = 'flex';
+    try {
+      await invoke('install_update');
+      // app restarts — code below won't run
+    } catch (err) {
+      msg.textContent = 'アップデート失敗: ' + err;
+      nowBtn.disabled = false;
+      nowBtn.textContent = '今すぐ更新';
+    }
+  });
+
+  laterBtn.addEventListener('click', hideBar);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   const port = await invoke('get_video_port');
@@ -24,6 +79,7 @@ async function init() {
 
   bindToolbar();
   bindContextMenu();
+  bindUpdateBar();
   listenFileWatcher();
 
   showEmpty(true);

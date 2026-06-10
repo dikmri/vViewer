@@ -1,3 +1,62 @@
+/* ── Update bar ──────────────────────────────────────── */
+#update-bar {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 101;
+  align-items: center;
+  gap: 10px;
+  background: #1e3a5f;
+  border-bottom: 1px solid #2d5a9e;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #c7d9f0;
+  flex-wrap: wrap;
+}
+#update-bar.visible { display: flex; }
+
+#update-msg { flex: 1; min-width: 0; }
+
+#update-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+#update-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: #2d5a9e;
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+#update-progress-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  width: var(--pct, 0%);
+  transition: width 0.2s ease;
+}
+#update-progress-text { font-size: 12px; white-space: nowrap; min-width: 32px; }
+
+#update-actions { display: flex; gap: 6px; }
+#update-actions button {
+  padding: 3px 12px;
+  font-size: 12px;
+}
+#update-actions button.secondary {
+  background: transparent;
+  border-color: #2d5a9e;
+  color: #8fb3d9;
+}
+#update-actions button.secondary:hover {
+  background: #1e3a5f;
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 :root {
   --bg:      #0e0e0e;
   --bg2:     #181818;
@@ -7,6 +66,7 @@
   --dim:     #888;
   --accent:  #3b82f6;
   --toolbar: 46px;
+  --update-bar-h: 0px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -22,7 +82,8 @@ html, body {
 /* ── Toolbar ─────────────────────────────────────────── */
 #toolbar {
   position: fixed;
-  inset: 0 0 auto 0;
+  top: var(--update-bar-h);
+  left: 0; right: 0;
   height: var(--toolbar);
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
@@ -93,7 +154,7 @@ button:hover { background: var(--accent); border-color: var(--accent); }
 
 /* ── Grid wrapper ────────────────────────────────────── */
 #grid-wrap {
-  margin-top: var(--toolbar);
+  margin-top: calc(var(--toolbar) + var(--update-bar-h));
   padding: 6px;
   min-height: calc(100vh - var(--toolbar));
 }
@@ -165,7 +226,8 @@ button:hover { background: var(--accent); border-color: var(--accent); }
 /* ── Empty state ─────────────────────────────────────── */
 #empty-state {
   position: fixed;
-  inset: var(--toolbar) 0 0 0;
+  top: calc(var(--toolbar) + var(--update-bar-h));
+  left: 0; right: 0; bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;

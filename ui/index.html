@@ -8,6 +8,19 @@
 </head>
 <body>
 
+<!-- ── Update bar ─────────────────────────────────────── -->
+<div id="update-bar" role="status" aria-live="polite">
+  <span id="update-msg"></span>
+  <div id="update-progress-wrap" style="display:none;">
+    <div id="update-progress-bar"></div>
+    <span id="update-progress-text">0%</span>
+  </div>
+  <div id="update-actions">
+    <button id="update-now-btn">今すぐ更新</button>
+    <button id="update-later-btn" class="secondary">後で</button>
+  </div>
+</div>
+
 <!-- ── Toolbar ───────────────────────────────────────── -->
 <div id="toolbar">
   <button id="btn-open" title="Open folder (Ctrl+O)">📁 Open Folder</button>

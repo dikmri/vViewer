@@ -7,3 +7,5 @@ dist/
 .env
 *.local
 app-icon.png
+.tauri-signing.key
+.tauri-signing.key.pub

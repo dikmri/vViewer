@@ -6,8 +6,12 @@ mod watcher;
 use database::{Database, FileInfo};
 use parking_lot::Mutex;
 use scanner::VideoFile;
+use serde::Serialize;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+use tauri_plugin_updater::UpdaterExt;
+
+// ── State ─────────────────────────────────────────────────────────────────────
 
 pub struct AppState {
     pub db: Arc<Mutex<Database>>,
@@ -15,7 +19,100 @@ pub struct AppState {
     _watcher: Mutex<Option<notify::RecommendedWatcher>>,
 }
 
-// ── Commands ──────────────────────────────────────────────────────────────────
+/// Holds the pending update between check and install
+struct PendingUpdate(std::sync::Mutex<Option<tauri_plugin_updater::Update>>);
+
+#[derive(Serialize, Clone)]
+struct UpdateInfo {
+    version: String,
+    body: String,
+}
+
+// ── Update commands ───────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn check_update(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, PendingUpdate>,
+) -> Result<Option<UpdateInfo>, String> {
+    let update = app
+        .updater_builder()
+        .build()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let info = update.as_ref().map(|u| UpdateInfo {
+        version: u.version.clone(),
+        body: u.body.clone().unwrap_or_default(),
+    });
+
+    *state.0.lock().unwrap() = update;
+    Ok(info)
+}
+
+#[tauri::command]
+async fn install_update(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, PendingUpdate>,
+) -> Result<(), String> {
+    let update = state.0.lock().unwrap().take();
+    let Some(update) = update else {
+        return Err("保留中のアップデートがありません".into());
+    };
+
+    let app_emit = app.clone();
+    let downloaded = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let downloaded2 = downloaded.clone();
+
+    update
+        .download_and_install(
+            move |chunk, content_len| {
+                let current = downloaded2.fetch_add(chunk as u64, std::sync::atomic::Ordering::Relaxed)
+                    + chunk as u64;
+                let percent = content_len
+                    .filter(|&t| t > 0)
+                    .map(|t| (current * 100 / t) as u32)
+                    .unwrap_or(0);
+                let _ = app_emit.emit("update-progress", percent);
+            },
+            || {},
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+    app.restart();
+}
+
+// ── Background auto-check ─────────────────────────────────────────────────────
+
+async fn auto_check_update(app: tauri::AppHandle) {
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+
+    let updater = match app.updater_builder().build() {
+        Ok(u) => u,
+        Err(_) => return,
+    };
+
+    let update = match updater.check().await {
+        Ok(Some(u)) => u,
+        _ => return,
+    };
+
+    let info = UpdateInfo {
+        version: update.version.clone(),
+        body: update.body.clone().unwrap_or_default(),
+    };
+
+    if let Some(state) = app.try_state::<PendingUpdate>() {
+        *state.0.lock().unwrap() = Some(update);
+    }
+
+    let _ = app.emit("update-available", info);
+}
+
+// ── Other commands ────────────────────────────────────────────────────────────
 
 #[tauri::command]
 fn pick_folder(app: tauri::AppHandle) -> Option<String> {
@@ -33,7 +130,6 @@ async fn scan_folder(
 ) -> Result<Vec<VideoFile>, String> {
     let files = scanner::scan_directory(&path).map_err(|e| e.to_string())?;
 
-    // Merge stored ratings/dimensions into the scanned list
     let paths: Vec<String> = files.iter().map(|f| f.path.clone()).collect();
     let enriched = {
         let db = state.db.lock();
@@ -106,11 +202,7 @@ async fn add_tag(
     tag: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
-    state
-        .db
-        .lock()
-        .add_tag(&path, &tag)
-        .map_err(|e| e.to_string())
+    state.db.lock().add_tag(&path, &tag).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -184,6 +276,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&app_data_dir)?;
@@ -199,6 +292,11 @@ pub fn run() {
                 video_port,
                 _watcher: Mutex::new(None),
             });
+            app.manage(PendingUpdate(std::sync::Mutex::new(None)));
+
+            // Kick off background update check
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(auto_check_update(handle));
 
             Ok(())
         })
@@ -213,6 +311,8 @@ pub fn run() {
             remove_tag,
             get_file_info,
             open_in_explorer,
+            check_update,
+            install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running vViewer");
