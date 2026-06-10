@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g. v0.1.0)'
+        description: 'リリースするタグ（例: v0.1.0）'
         required: true
 
 permissions:
@@ -31,8 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Linux system deps ────────────────────────────────
-      - name: Install Linux dependencies
+      - name: Linux 依存パッケージのインストール
         if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
@@ -42,62 +41,65 @@ jobs:
             librsvg2-dev \
             patchelf
 
-      # ── Node / npm (for @tauri-apps/cli) ─────────────────
-      - name: Set up Node.js
+      - name: Node.js のセットアップ
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
 
-      - name: Install npm dependencies
+      - name: npm 依存パッケージのインストール
         run: npm install
 
-      # ── Rust ─────────────────────────────────────────────
-      - name: Install Rust stable
+      - name: Rust のインストール
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin
 
-      - name: Rust build cache
+      - name: Rust ビルドキャッシュ
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
-      # ── Icon generation ───────────────────────────────────
-      - name: Generate app icon
+      - name: アプリアイコンの生成
         run: python3 scripts/gen_icon.py
 
-      # ── Build & upload release artifacts ─────────────────
-      - name: Build and publish release
+      - name: ビルド & リリースへアップロード
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName:      ${{ github.ref_name }}${{ github.event.inputs.tag }}
-          releaseName:  'vViewer ${{ github.ref_name }}${{ github.event.inputs.tag }}'
+          tagName:     ${{ github.ref_name }}
+          releaseName: 'vViewer ${{ github.ref_name }}'
           releaseBody: |
-            ## Changes
-            See [CHANGELOG](https://github.com/dikmri/vViewer/blob/main/CHANGELOG.md) for details.
+            ## vViewer ${{ github.ref_name }}
 
-            ## Install
+            大量の動画ファイルを高速に閲覧できる動画ビューアです。
 
-            **Windows** — download the `.msi` installer below and run it.
+            ### ダウンロード
 
-            **macOS** — download the `.dmg`, open it, and drag vViewer to Applications.
-            > First launch: right-click → Open to bypass Gatekeeper (no code-signing yet).
+            | OS | ファイル |
+            |---|---|
+            | Windows | `.msi` インストーラー |
+            | macOS | `.dmg`（Intel + Apple Silicon ユニバーサル） |
+            | Linux | `.AppImage` または `.deb` |
 
-            **Linux** — download the `.AppImage`, make it executable (`chmod +x`), and run it.
-            Or download the `.deb` and install with `sudo dpkg -i`.
+            ### ワンコマンドインストール
 
-            ## One-command install (Linux / macOS)
+            **Linux / macOS**
             ```sh
             curl -sSfL https://raw.githubusercontent.com/dikmri/vViewer/main/install.sh | sh
             ```
 
-            **Windows (PowerShell)**
+            **Windows（PowerShell）**
             ```powershell
             irm https://raw.githubusercontent.com/dikmri/vViewer/main/install.ps1 | iex
             ```
-          releaseDraft:   false
-          prerelease:     false
-          iconPath:       app-icon.png
-          args:           ${{ matrix.args }}
+
+            > **macOS 注意:** コード署名なしのため、初回起動は右クリック→「開く」を選んでください。
+
+            ---
+
+            *High-performance video viewer. [English README](https://github.com/dikmri/vViewer#english)*
+          releaseDraft: false
+          prerelease:   false
+          iconPath:     app-icon.png
+          args:         ${{ matrix.args }}

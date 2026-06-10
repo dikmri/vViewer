@@ -1,110 +1,140 @@
 # vViewer
 
-**High-performance video viewer for large collections.**
+**大量の動画ファイルを高速に閲覧するためのビューアです。**
 
-Handles folders with thousands of video files without slowdown. Built in Rust with [Tauri](https://tauri.app) for a lightweight native binary (~8 MB), with a virtual-scroll masonry grid that only decodes videos currently on screen.
+数千〜数万ファイルのフォルダでもパフォーマンスが落ちません。
+Rust製バックエンド（[Tauri](https://tauri.app)）と仮想スクロールのマソングリッドにより、画面に表示されている動画だけをデコードします。
+
+> **High-performance video viewer for large collections.**  
+> Handles thousands of files without slowdown. Rust/Tauri backend with virtual masonry grid.
 
 ---
 
-## Key improvements over videoswarm
+## videoswarm との違い
 
 | | videoswarm | vViewer |
 |---|---|---|
-| Backend | Node.js / Electron | Rust (Tauri) |
-| Directory scan | JS single-thread | Rust + rayon parallel |
-| Grid DOM nodes | All files | Visible only (virtual scroll) |
-| Video decoders | All visible | Viewport + 1 buffer screen |
-| Memory growth | Linear with file count | Constant with file count |
-| Install size | ~200 MB | ~8 MB |
+| バックエンド | Node.js / Electron | Rust (Tauri) |
+| ディレクトリスキャン | JS シングルスレッド | Rust + rayon 並列処理 |
+| グリッドの DOM ノード数 | ファイル総数分 | 表示中のみ（仮想スクロール） |
+| 映像デコーダ数 | 表示中すべて | ビューポート ± バッファ 1画面 |
+| メモリ増加 | ファイル数に比例 | 表示数に比例（ほぼ一定） |
+| バイナリサイズ | 約 200 MB | 約 8 MB |
 
 ---
 
-## Features
+## 機能
 
-- **Virtual masonry grid** — renders O(visible) tiles regardless of total count
-- **Parallel scanner** — rayon thread pool, fast even on 10 000+ file folders
-- **Hardware-accelerated playback** — native WebView `<video>` (WebView2 / WKWebView / WebKitGTK)
-- **Zoom control** — adjust column width from 120 px to 520 px
-- **Search** — real-time filename filter
-- **Sort** — by date, name, size, or rating
-- **5-star rating** — stored in SQLite, persists across sessions
-- **File watcher** — auto-refreshes when files are added or removed
-- **Mute toggle** — unmute all playing videos at once
-- **Context menu** — Show in file manager, copy path, set rating
+- **仮想マソングリッド** — 全ファイル数によらず DOM ノード数は表示中の数だけ
+- **並列スキャナー** — Rayon スレッドプール。10,000 ファイル超のフォルダも高速
+- **ハードウェアアクセラレーション再生** — ネイティブ WebView の `<video>` タグ使用
+  （Windows: WebView2、macOS: WKWebView、Linux: WebKitGTK）
+- **ズームコントロール** — カラム幅 120px〜520px を自由に調整
+- **リアルタイム検索** — ファイル名フィルター
+- **並べ替え** — 日付・名前・サイズ・評価
+- **5段階評価** — SQLite に永続保存
+- **ファイル監視** — ファイルの追加・削除を自動検出してグリッドを更新
+- **ミュート切り替え** — 全動画を一括ミュート/ミュート解除
+- **コンテキストメニュー** — ファイルマネージャーで開く・パスコピー・評価設定
+- **ダブルクリックでフルスクリーン再生**
 
 ---
 
-## Install
+## インストール
 
-### One command
+### ワンコマンド（推奨）
 
 **Linux / macOS**
 ```sh
 curl -sSfL https://raw.githubusercontent.com/dikmri/vViewer/main/install.sh | sh
 ```
 
-**Windows (PowerShell)**
+**Windows（PowerShell）**
 ```powershell
 irm https://raw.githubusercontent.com/dikmri/vViewer/main/install.ps1 | iex
 ```
 
-### Manual download
+### 手動ダウンロード
 
-Download the latest release from the [Releases page](https://github.com/dikmri/vViewer/releases):
+[リリースページ](https://github.com/dikmri/vViewer/releases) から最新版をダウンロード:
 
-| Platform | File |
+| OS | ファイル |
 |---|---|
 | Windows | `vViewer_*_x64_en-US.msi` |
-| macOS (Universal) | `vViewer_*_universal.dmg` |
-| Linux | `vViewer_*_amd64.AppImage` or `.deb` |
+| macOS（Universal） | `vViewer_*_universal.dmg` |
+| Linux | `vViewer_*_amd64.AppImage` または `.deb` |
 
-> **macOS note:** Right-click → Open on first launch to bypass Gatekeeper (no code-signing yet).
+> **macOS 注意:** コード署名なしのため、初回起動は右クリック→「開く」を選んでください（Gatekeeper 回避）。
 
 ---
 
-## Build from source
+## ソースからビルド
 
-Prerequisites: [Rust](https://rustup.rs) and [Node.js](https://nodejs.org) (LTS).
+事前に [Rust](https://rustup.rs) と [Node.js LTS](https://nodejs.org) が必要です。
 
 ```sh
 git clone https://github.com/dikmri/vViewer
 cd vViewer
 npm install
-npm run build          # produces release binary in src-tauri/target/release/bundle/
+npm run build   # src-tauri/target/release/bundle/ にバイナリが生成されます
 ```
 
-For development with hot-reload:
+開発用（ホットリロード）:
 ```sh
 npm run dev
 ```
 
 ---
 
-## Architecture
+## アーキテクチャ
 
 ```
 vViewer/
-├── src-tauri/          Rust backend (Tauri)
+├── src-tauri/              Rust バックエンド（Tauri v2）
 │   └── src/
-│       ├── lib.rs          Tauri commands & app setup
-│       ├── scanner.rs      Parallel directory scanner (rayon + walkdir)
-│       ├── database.rs     SQLite (rusqlite, WAL mode)
-│       ├── video_server.rs Axum HTTP server — streams files with Range support
-│       └── watcher.rs      fs-event watcher (notify crate)
-└── ui/                 Static HTML/JS/CSS frontend
+│       ├── lib.rs          Tauri コマンド & アプリ初期化
+│       ├── scanner.rs      並列ディレクトリスキャン（rayon + walkdir）
+│       ├── database.rs     SQLite（rusqlite、WAL モード）
+│       ├── video_server.rs Axum HTTP サーバー（Range リクエスト対応）
+│       └── watcher.rs      ファイルシステム監視（notify クレート）
+└── ui/                     静的フロントエンド（バンドル不要）
     ├── index.html
     ├── js/
-    │   ├── app.js          Tauri commands, toolbar, context menu
-    │   └── grid.js         Virtual masonry grid
+    │   ├── app.js          コマンド呼び出し・ツールバー・コンテキストメニュー
+    │   └── grid.js         仮想マソングリッド
     └── css/main.css
 ```
 
-### Why a local HTTP server for video?
+### ローカル HTTP サーバーを使う理由
 
-The built-in browser `<video>` element needs HTTP range requests to seek within files. The Tauri asset protocol supports this, but for maximum reliability across all three platforms we spin up an Axum HTTP server (`127.0.0.1:<random port>`) at startup. This also makes it trivial to stream any path the user opens, without security-scope configuration.
+ブラウザの `<video>` 要素がシーク（任意の位置への移動）をするには HTTP Range リクエストが必要です。Tauri のアセットプロトコルでも対応可能ですが、3プラットフォーム全てで確実に動作させるため、起動時に Axum HTTP サーバー（`127.0.0.1:ランダムポート`）を立ち上げてファイルをストリーミングしています。
 
 ---
 
-## License
+## ライセンス
 
 MIT
+
+---
+
+<details>
+<summary>English</summary>
+
+## Features
+- Virtual masonry grid — O(visible) DOM nodes regardless of total file count
+- Parallel scanner — rayon thread pool, fast even for 10,000+ file folders
+- Hardware-accelerated playback via native WebView `<video>`
+- Zoom control, real-time search, sort, 5-star rating (SQLite), file watcher
+- Mute toggle, context menu, double-click fullscreen
+
+## Install
+**Linux / macOS:** `curl -sSfL https://raw.githubusercontent.com/dikmri/vViewer/main/install.sh | sh`  
+**Windows:** `irm https://raw.githubusercontent.com/dikmri/vViewer/main/install.ps1 | iex`
+
+## Build from source
+Requires Rust and Node.js LTS.
+```sh
+git clone https://github.com/dikmri/vViewer && cd vViewer
+npm install && npm run build
+```
+</details>
