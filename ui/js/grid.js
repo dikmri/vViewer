@@ -87,7 +87,10 @@ export class MasonryGrid {
       return { x, y, w: this.colWidth, h };
     });
 
-    const totalH = colH.length ? Math.max(...colH) : 0;
+    const totalH    = colH.length ? Math.max(...colH) : 0;
+    const usedWidth = numCols * (this.colWidth + this.gap) - this.gap;
+    this.container.style.width  = usedWidth + 'px';
+    this.container.style.margin = '0 auto';
     this.container.style.height = totalH + 'px';
 
     this._clearAll();

@@ -74,17 +74,32 @@ function bindUpdateBar() {
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 function bindKeyboard() {
-  window.addEventListener('keydown', (e) => {
-    // Don't capture when typing in an input
-    if (document.activeElement?.tagName === 'INPUT') return;
+  const held  = new Set();
+  let   rafId = null;
+  const SPEED = 8; // px per frame
 
-    const amount = Math.round(window.innerHeight * 0.6);
-    if (e.key === 'j' || e.key === 'J') {
-      e.preventDefault();
-      window.scrollBy({ top: amount, behavior: 'smooth' });
-    } else if (e.key === 'k' || e.key === 'K') {
-      e.preventDefault();
-      window.scrollBy({ top: -amount, behavior: 'smooth' });
+  function loop() {
+    if (held.has('j')) window.scrollBy(0,  SPEED);
+    if (held.has('k')) window.scrollBy(0, -SPEED);
+    rafId = held.size > 0 ? requestAnimationFrame(loop) : null;
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (document.activeElement?.tagName === 'INPUT') return;
+    const key = e.key.toLowerCase();
+    if (key !== 'j' && key !== 'k') return;
+    e.preventDefault();
+    if (!held.has(key)) {
+      held.add(key);
+      if (!rafId) rafId = requestAnimationFrame(loop);
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    const key = e.key.toLowerCase();
+    if (held.delete(key) && held.size === 0 && rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
     }
   });
 }
